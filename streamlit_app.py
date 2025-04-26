@@ -33,13 +33,14 @@ if prompt := st.chat_input("What is up?"):
             model=st.secrets["MODEL"],
             messages=st.session_state.messages
         )
+        assistant_response = assistant_response.choices[0].message.content
         # # Simulate stream of response with milliseconds delay
-        # for chunk in assistant_response.split():
-        #     full_response += chunk + " "
-        #     time.sleep(0.05)
-        #     # Add a blinking cursor to simulate typing
-        #     message_placeholder.markdown(full_response + "▌")
-        message_placeholder.markdown(assistant_response.choices[0].message.content)
+        for chunk in assistant_response.split():
+            full_response += chunk + " "
+            time.sleep(0.05)
+            # Add a blinking cursor to simulate typing
+            message_placeholder.markdown(full_response + "▌")
+        message_placeholder.markdown(assistant_response)
     # Add assistant response to chat history
-    # st.session_state.messages.append({"role": "assistant", "content": full_response})
-    st.session_state.messages.append({"role": "assistant", "content": assistant_response.choices[0].message.content})
+
+    st.session_state.messages.append({"role": "assistant", "content": assistant_response})

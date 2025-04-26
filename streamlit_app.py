@@ -39,7 +39,7 @@ if prompt := st.chat_input("What is up?"):
         #     time.sleep(0.05)
         #     # Add a blinking cursor to simulate typing
         #     message_placeholder.markdown(full_response + "▌")
-        # message_placeholder.markdown(full_response)
+        message_placeholder.markdown(assistant_response.choices[0].message.content)
     # Add assistant response to chat history
     # st.session_state.messages.append({"role": "assistant", "content": full_response})
     st.session_state.messages.append({"role": "assistant", "content": assistant_response.choices[0].message.content})

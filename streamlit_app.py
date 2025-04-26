@@ -3,7 +3,10 @@ from openai import OpenAI
 import random
 import time
 
-client = OpenAI(st.secrets["API_KEY"], st.secrets["BASE_URL"])
+client = OpenAI(
+    api_key=st.secrets["API_KEY"],
+    base_url=st.secrets["BASE_URL"]
+    )
 
 # Initialize chat history
 if "messages" not in st.session_state:

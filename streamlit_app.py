@@ -1,47 +1,95 @@
 import streamlit as st
-from openai import OpenAI
-import random
-import time
+import os
+import tempfile
+import fitz  # PyMuPDF
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.chat_models import ChatOpenAI
+from langchain.chains import RetrievalQA
+from langchain.document_loaders import TextLoader
+from langchain.schema import Document
 
-client = OpenAI(
-    api_key=st.secrets["API_KEY"],
-    base_url=st.secrets["BASE_URL"]
-    )
+# Konfiguracja OpenRouter
+os.environ["OPENAI_API_KEY"] = st.secrets["API_KEY"]
+os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
 
-file_explorer = st.sidebar.file_uploader("Add your RAG files :)", type = "pdf", accept_multiple_files=True)
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Let's start chatting! 👇"}]
+st.set_page_config(page_title="📚 Chatbot z Plików", layout="wide")
 
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Funkcja do ekstrakcji tekstu z PDF przez PyMuPDF
+def extract_text_from_pdf(file_path):
+    doc = fitz.open(file_path)
+    texts = []
+    for page in doc:
+        texts.append(page.get_text())
+    return "\n".join(texts)
 
-# Accept user input
-if prompt := st.chat_input("What is up?"):
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(prompt)
+# Funkcja do stworzenia bazy wektorowej z dokumentów
+def create_vectorstore(file_list):
+    docs = []
+    for file in file_list:
+        suffix = file.name.split(".")[-1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp_file:
+            tmp_file.write(file.read())
+            tmp_path = tmp_file.name
 
-    # Display assistant response in chat message container
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-        assistant_response = client.chat.completions.create(
-            model=st.secrets["MODEL"],
-            messages=st.session_state.messages
-        )
-        assistant_response = assistant_response.choices[0].message.content
-        # # Simulate stream of response with milliseconds delay
-        for chunk in assistant_response.split():
-            full_response += chunk + " "
-            time.sleep(0.05)
-            # Add a blinking cursor to simulate typing
-            message_placeholder.markdown(full_response + "▌")
-        message_placeholder.markdown(full_response)
-    # Add assistant response to chat history
+        if suffix == "pdf":
+            text = extract_text_from_pdf(tmp_path)
+            docs.append(Document(page_content=text, metadata={"name": file.name}))
+        elif suffix == "txt":
+            loader = TextLoader(tmp_path)
+            docs.extend(loader.load())
+    
+    # Podział tekstu na fragmenty
+    splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    split_docs = splitter.split_documents(docs)
 
-    st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+    # Embedding (tani model z HuggingFace)
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+    # FAISS indexing
+    vectorstore = FAISS.from_documents(split_docs, embeddings)
+    return vectorstore
+
+# Lewy pasek: uploader
+st.sidebar.header("📎 Prześlij pliki")
+uploaded_files = st.sidebar.file_uploader("PDF lub TXT", type=["pdf", "txt"], accept_multiple_files=True)
+
+# Główna kolumna: czat
+st.header("🤖 Chatbot z opcjonalnym kontekstem z plików")
+
+# Inicjalizacja FAISS tylko jeśli pliki istnieją
+vectorstore = None
+if uploaded_files:
+    with st.spinner("🔍 Tworzę bazę wiedzy z plików..."):
+        vectorstore = create_vectorstore(uploaded_files)
+        st.sidebar.success("📚 Pliki załadowane i zindeksowane!")
+
+# Model OpenRouter (darmowy)
+llm = ChatOpenAI(model_name="mistralai/mistral-7b-instruct", temperature=0.3)
+
+# Inicjalizacja czatu
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Wprowadzenie użytkownika
+user_input = st.chat_input("Zadaj pytanie...")
+
+if user_input:
+    st.session_state.chat_history.append(("user", user_input))
+    with st.spinner("🧠 Myślę..."):
+
+        # Jeśli mamy wektory, użyj RAG, w przeciwnym razie tylko LLM
+        if vectorstore:
+            retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+            qa = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+            answer = qa.run(user_input)
+        else:
+            answer = llm.predict(user_input)
+
+        st.session_state.chat_history.append(("bot", answer))
+
+# Wyświetl historię rozmowy
+for sender, message in st.session_state.chat_history:
+    with st.chat_message("user" if sender == "user" else "assistant"):
+        st.markdown(message)

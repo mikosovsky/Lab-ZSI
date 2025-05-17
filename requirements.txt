@@ -2,3 +2,5 @@ streamlit
 openai
 PyMuPDF
 fitz
+langchain_huggingface
+faiss

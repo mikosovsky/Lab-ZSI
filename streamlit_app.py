@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import tempfile
 import fitz  # PyMuPDF
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.chat_models import ChatOpenAI

@@ -5,3 +5,4 @@ PyMuPDF
 fitz
 langchain
 langchain-huggingface
+langchain_community

@@ -8,7 +8,7 @@ client = OpenAI(
     base_url=st.secrets["BASE_URL"]
     )
 
-file = st.file_uploader("Add your RAG files :)", type = "pdf", accept_multiple_files=True)
+file_explorer = st.sidebar.file_uploader("Add your RAG files :)", type = "pdf", accept_multiple_files=True)
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Let's start chatting! 👇"}]
